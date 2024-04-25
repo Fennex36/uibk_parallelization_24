@@ -20,6 +20,6 @@ double limiter_minmod::compute(double first, double second, double third) {
 			limit = std::min(first, std::min(second, third));
 		}
 	}
-	std::cout << "RESULT: " << first << " " << second << " " << third << " " << limit << std::endl;
+	//std::cout << "RESULT: " << first << " " << second << " " << third << " " << limit << std::endl;
 	return limit;
 }
