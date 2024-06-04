@@ -3,9 +3,11 @@
 #include <cstdlib>
 #include <iostream>
 #include <chrono>
+#include <iterator>
 #include <sys/time.h>
 #include <tuple>
 #include <vector>
+#include <mpi.h>
 
 // Include that allows to print result as an image
 // Also, ignore some warnings that pop up when compiling this as C++ mode
@@ -65,6 +67,7 @@ auto HSVToRGB(double H, const double S, double V) {
 	return std::make_tuple(R, G, B);
 }
 
+// --------------------------------------------------------------- WORKING BUT NOT PARALLEL CODE
 void calcMandelbrot(Image &image, int size_x, int size_y) {
 
 	auto time_start = std::chrono::high_resolution_clock::now();
@@ -89,7 +92,83 @@ void calcMandelbrot(Image &image, int size_x, int size_y) {
 			float y = 0;
 			int num_iterations = 0;
 
-			// Check if the distance from the origin becomes
+			// Check if the distance from the relative origin becomes
+			// greater than 2 within the max number of iterations.
+			while ((x * x + y * y <= 2 * 2) && (num_iterations < max_iterations)) {
+				float x_tmp = x * x - y * y + cx;
+				y = 2 * x * y + cy;
+				x = x_tmp;
+				num_iterations += 1;
+			}
+
+			// Normalize iteration and write it to pixel position
+			double value = fabs((num_iterations / (float)max_iterations)) * 200;
+
+			auto [red, green, blue] = HSVToRGB(value, 1.0, 1.0);
+
+			int channel = 0;
+			image[index(pixel_y, pixel_x, size_y, size_x, channel++)] = (uint8_t)(red * UINT8_MAX);
+			image[index(pixel_y, pixel_x, size_y, size_x, channel++)] = (uint8_t)(green * UINT8_MAX);
+			image[index(pixel_y, pixel_x, size_y, size_x, channel++)] = (uint8_t)(blue * UINT8_MAX);
+		}
+	}
+	
+	auto time_end = std::chrono::high_resolution_clock::now();
+	auto time_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count();
+	
+	std::cout << "Mandelbrot set calculation for " << size_x << "x" << size_y << " took: " << time_elapsed << " ms." << std::endl;
+}
+
+int main_bu(int argc, char **argv) {
+
+	int size_x = default_size_x;
+	int size_y = default_size_y;
+
+	if (argc == 3) {
+		size_x = atoi(argv[1]);
+		size_y = atoi(argv[2]);
+		std::cout << "Using size " << size_x << "x" << size_y << std::endl;
+	} else {
+		std::cout << "No arguments given, using default size " << size_x << "x" << size_y << std::endl;
+	}
+
+	Image image(num_channels * size_x * size_y);
+
+	calcMandelbrot(image, size_x, size_y);
+
+	constexpr int stride_bytes = 0;
+	stbi_write_png("mandelbrot_mpi.png", size_x, size_y, num_channels, image.data(), stride_bytes);
+
+	return EXIT_SUCCESS;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// make in build folder
+// from outermost repo folder send job script with sbatch job.sh
+// look into output.log file for prints
+
+void calcMandelbrot_Test(Image &image, int size_x, int size_y, int rank_size, int rank) {
+
+	auto time_start = std::chrono::high_resolution_clock::now();
+
+	const float left = -2.5, right = 1;
+	const float bottom = -1, top = 1;
+
+	// calculate rank-specific borders in complex space
+	const float rank_top = (top - bottom) / rank_size * (rank+1) + bottom;
+	const float rank_bottom = (top - bottom) / rank_size * rank + bottom;
+
+	for (int pixel_y = 0; pixel_y < size_y; pixel_y++) {
+		// scale y pixel into mandelbrot coordinate system
+		const float cy = (pixel_y / (float)size_y) * (rank_top - rank_bottom) + rank_bottom;
+		for (int pixel_x = 0; pixel_x < size_x; pixel_x++) {
+			// scale x pixel into mandelbrot coordinate system
+			const float cx = (pixel_x / (float)size_x) * (right - left) + left;
+			float x = 0;
+			float y = 0;
+			int num_iterations = 0;
+
+			// Check if the distance from the relative origin becomes
 			// greater than 2 within the max number of iterations.
 			while ((x * x + y * y <= 2 * 2) && (num_iterations < max_iterations)) {
 				float x_tmp = x * x - y * y + cx;
@@ -121,20 +200,42 @@ int main(int argc, char **argv) {
 	int size_x = default_size_x;
 	int size_y = default_size_y;
 
+	// Initialize MPI
+	MPI_Init(&argc, &argv); // initialize the MPI environment
+	int rank_size;
+	MPI_Comm_size(MPI_COMM_WORLD, &rank_size); // get the number of ranks
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank); // get the rank of the caller
+	std::cout << "This print was performed by rank " << rank << "/" << rank_size << std::endl;
+	
+	// check for image size
 	if (argc == 3) {
 		size_x = atoi(argv[1]);
 		size_y = atoi(argv[2]);
-		std::cout << "Using size " << size_x << "x" << size_y << std::endl;
+		if (rank == 0) {
+			std::cout << "Using size " << size_x << "x" << size_y << std::endl;
+		}
 	} else {
-		std::cout << "No arguments given, using default size " << size_x << "x" << size_y << std::endl;
+		if (rank == 0) {
+			std::cout << "No arguments given, using default size " << size_x << "x" << size_y << std::endl;
+		}
 	}
 
 	Image image(num_channels * size_x * size_y);
 
-	calcMandelbrot(image, size_x, size_y);
+	// make sub-images
+	int size_y_per_rank = size_y / rank_size;
+	Image sub_image(num_channels * size_x * size_y_per_rank);
+	calcMandelbrot_Test(sub_image, size_x, size_y_per_rank, rank_size, rank);
 
-	constexpr int stride_bytes = 0;
-	stbi_write_png("mandelbrot_mpi.png", size_x, size_y, num_channels, image.data(), stride_bytes);
+	// gather sub-images from all ranks
+	MPI_Gather(sub_image.data(), sub_image.size(), MPI_UINT8_T, image.data(), sub_image.size(), MPI_UINT8_T, 0, MPI_COMM_WORLD);
+	MPI_Finalize();
+
+	if (rank == 0) {
+		constexpr int stride_bytes = 0;
+		stbi_write_png("mandelbrot_mpi.png", size_x, size_y, num_channels, image.data(), stride_bytes);
+	}
 
 	return EXIT_SUCCESS;
 }
