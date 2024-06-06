@@ -25,17 +25,17 @@ add_executable (run_full_code_parallel
     main_full_code_parallel.cpp
     )
 
-target_include_directories(run_full_code
+target_include_directories(run_full_code_parallel
     PUBLIC ${CODE_INCLUDE_DIR}
 )
 
-target_link_libraries(run_full_code
+target_link_libraries(run_full_code_parallel
     PUBLIC utilities
     PUBLIC sim_setup
     PUBLIC solver
 )
 
-install(TARGETS run_full_code
+install(TARGETS run_full_code_parallel
     RUNTIME DESTINATION ${PROJECT_SOURCE_DIR}/bin
 )
 
