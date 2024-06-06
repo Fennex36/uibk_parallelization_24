@@ -8,7 +8,8 @@ mpi_handler::mpi_handler(const std::vector<int> &_num_tasks) {
 
 	// Get number of ranks from MPI
 	int ntasks;
-	// TBD by students
+	MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
+	std::cout << "TEST mpi_handler.cpp: number of tasks: " << ntasks << std::endl;
 
 
 	num_tasks.resize(_num_tasks.size());

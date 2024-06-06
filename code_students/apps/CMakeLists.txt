@@ -43,6 +43,7 @@ target_link_libraries(run_full_code_parallel
     PUBLIC utilities
     PUBLIC sim_setup
     PUBLIC solver
+    PUBLIC mpi_stuff
     PUBLIC ${MPI_CXX_LIBRARIES}
 )
 

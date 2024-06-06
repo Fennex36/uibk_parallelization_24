@@ -5,6 +5,7 @@
 #include "solver/time_integrator.hpp"
 #include "util/matrix.hpp"
 #include "util/utility_functions.hpp"
+#include "setup/mpi_handler.hpp"
 
 #include <cmath>
 #include <functional>
@@ -41,8 +42,12 @@ int main(int argc, char **argv) {
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank); // get the rank of the caller
 	std::cout << "This print was performed by rank " << rank << "/" << rank_size << std::endl;
+	
+	// test if mpi_handler works
+	const std::vector<int> v = {1, 2, 3};  // random vector just as an input
+	mpi_handler test(v);  // initialize an mpi_handler object to see if it works
+	
 	MPI_Finalize();
-
 	return 0;
 
 	std::vector<double> bound_low(3), bound_up(3);
