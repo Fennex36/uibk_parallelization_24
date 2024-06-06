@@ -25,14 +25,25 @@ add_executable (run_full_code_parallel
     main_full_code_parallel.cpp
     )
 
+target_compile_definitions(run_full_code_parallel
+    PRIVATE PARALLEL_VERSION
+    PUBLIC OMPI_SKIP_MPICXX
+)
+
+target_compile_options(run_full_code_parallel
+    PRIVATE ${MPI_CXX_COMPILE_FLAGS}
+)
+
 target_include_directories(run_full_code_parallel
     PUBLIC ${CODE_INCLUDE_DIR}
+    PUBLIC ${MPI_CXX_INCLUDE_PATH}
 )
 
 target_link_libraries(run_full_code_parallel
     PUBLIC utilities
     PUBLIC sim_setup
     PUBLIC solver
+    PUBLIC ${MPI_CXX_LIBRARIES}
 )
 
 install(TARGETS run_full_code_parallel

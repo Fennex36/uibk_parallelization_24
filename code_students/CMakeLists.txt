@@ -24,6 +24,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -g2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -mtune=native -DNDEBUG")
 
 find_package(HDF5 REQUIRED)
+find_package(MPI REQUIRED)
 MESSAGE(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIR}")
 
 # Make serial form of the library
