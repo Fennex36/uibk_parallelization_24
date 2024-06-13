@@ -37,18 +37,6 @@ void init_Sedov(fluid_cell &fluid, double x_position, double y_position, double 
 int main(int argc, char **argv) {
 	// Initialize MPI
 	MPI_Init(&argc, &argv); // initialize the MPI environment
-	int rank_size;
-	MPI_Comm_size(MPI_COMM_WORLD, &rank_size); // get the number of ranks
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank); // get the rank of the caller
-	std::cout << "This print was performed by rank " << rank << "/" << rank_size << std::endl;
-	
-	// test if mpi_handler works
-	const std::vector<int> v = {1, 2, 3};  // random vector just as an input
-	mpi_handler test(v);  // initialize an mpi_handler object to see if it works
-	
-	MPI_Finalize();
-	return 0;
 
 	std::vector<double> bound_low(3), bound_up(3);
 	bound_low[0] = -0.5;
@@ -64,7 +52,18 @@ int main(int argc, char **argv) {
 	num_cells[1] = 64;
 	num_cells[2] = 64;
 
-	grid_3D my_grid(bound_low, bound_up, num_cells, 2);
+	// create mpi handler
+	const std::vector<int> task_per_dim = {2, 2, 1};
+	mpi_handler handler(task_per_dim);  // initialize an mpi_handler object to see if it works
+
+	// create global grid
+	grid_3D global_grid(bound_low, bound_up, num_cells, 2);
+
+	// create local grid from global grid with mpi handler
+	grid_3D my_grid = handler.make_local_grid(global_grid);
+
+	MPI_Finalize();
+	return 0;
 
 	// Get number of Sedov cells
 	Sedov_volume = 0.0;
