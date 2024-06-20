@@ -141,6 +141,9 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO
+	// check if image resolution is divisible by the number of ranks
+
 	Image image(num_channels * size_x * size_y);
 
 	// make sub-images (devided in y-direction)

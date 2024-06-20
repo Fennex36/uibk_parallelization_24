@@ -60,22 +60,20 @@ int main(int argc, char **argv) {
 	grid_3D global_grid(bound_low, bound_up, num_cells, 2);
 
 	// create local grid from global grid with mpi handler
-	grid_3D my_grid = handler.make_local_grid(global_grid);
+	grid_3D local_grid = handler.make_local_grid(global_grid);
 
-	// Get number of Sedov cells
-	double Sedov_volume_local = 0.0;
+	// Get Sedov volume
 	int num_Sedov_cells_local = 0;
-	double volume_cell = my_grid.x_grid.get_dx() * my_grid.y_grid.get_dx() * my_grid.z_grid.get_dx();
+	double volume_cell = local_grid.x_grid.get_dx() * local_grid.y_grid.get_dx() * local_grid.z_grid.get_dx();
 
-	for (int ix = 0; ix < my_grid.get_num_cells(0); ++ix) {
-		double x_position = my_grid.x_grid.get_center(ix);
-		for (int iy = 0; iy < my_grid.get_num_cells(1); ++iy) {
-			double y_position = my_grid.y_grid.get_center(iy);
-			for (int iz = 0; iz < my_grid.get_num_cells(2); ++iz) {
-				double z_position = my_grid.z_grid.get_center(iz);
+	for (int ix = 0; ix < local_grid.get_num_cells(0); ++ix) {
+		double x_position = local_grid.x_grid.get_center(ix);
+		for (int iy = 0; iy < local_grid.get_num_cells(1); ++iy) {
+			double y_position = local_grid.y_grid.get_center(iy);
+			for (int iz = 0; iz < local_grid.get_num_cells(2); ++iz) {
+				double z_position = local_grid.z_grid.get_center(iz);
 				double dist = sqrt(sim_util::square(x_position) + sim_util::square(y_position) + sim_util::square(z_position));
 				if (dist < 0.1) {
-					Sedov_volume_local += volume_cell;
 					num_Sedov_cells_local++;
 				}
 			}
@@ -83,36 +81,26 @@ int main(int argc, char **argv) {
 	}
 
 	// find total Sedov volume across all ranks
-	double Sedov_volume_global;
 	int num_Sedov_cells_global;
-	MPI_Allreduce(&Sedov_volume_local, &Sedov_volume_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-	MPI_Allreduce(&num_Sedov_cells_local, &num_Sedov_cells_global, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-	Sedov_volume = Sedov_volume_global;
-
-	// std::cout << " Volume of Sedov region: " << Sedov_volume_local << " in " << num_Sedov_cells_local << " cells\n";
-	// std::cout << " Total Sedov volume: " << Sedov_volume_global << " \n";
-	// std::cout << " Total number of cells: " << num_Sedov_cells_global << " \n";
-	// std::cout << " Volume of one cell: " << Sedov_volume_global/num_Sedov_cells_global << " \n";
-	// std::cout << " Total energy: " << 1.0 << " \n";
-	// std::cout << " Energy in one cell: " << 1.0/num_Sedov_cells_global << " \n";
-	// std::cout << " Energy density in a cell: " << 1.0/num_Sedov_cells_global/( Sedov_volume_global/num_Sedov_cells_global) << " \n";
+	MPI_Allreduce(&num_Sedov_cells_local, &num_Sedov_cells_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	Sedov_volume = volume_cell * num_Sedov_cells_global;
 
 	MPI_Finalize();
 	return 0;
 
 	// Now, I will create a HD fluid
 	fluid hd_fluid(parallelisation::FluidType::adiabatic);
-	hd_fluid.setup(my_grid);
+	hd_fluid.setup(local_grid);
 
 	std::function<void(fluid_cell &, double, double, double)> function_init = init_Sedov;
 
-	finite_volume_solver solver(hd_fluid);
+	finite_volume_solver solver(hd_fluid, handler, global_grid);
 	solver.set_init_function(function_init);
 
 	double t_final = 0.1;
 	double dt_out = 0.005;
 
-	solver.run(my_grid, hd_fluid, t_final, dt_out);
+	solver.run(local_grid, hd_fluid, t_final, dt_out);
 
 	return 0;
 }

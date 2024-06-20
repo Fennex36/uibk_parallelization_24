@@ -19,7 +19,8 @@ mpi_handler::mpi_handler(const std::vector<int> &_num_tasks) {
 	// Check the correct total number of dimensional sub-tasks
 	if(ntasks != num_tasks[0]*num_tasks[1]*num_tasks[2]){
 		std::cerr << " Wrong number of processes " << std::endl;
-		std::cout << ntasks << " " << num_tasks[0]*num_tasks[1]*num_tasks[2] << std::endl;
+		std::cout << "There are " << ntasks << " ranks," << std::endl;
+		std::cout << "but you are demanding " << num_tasks[0]*num_tasks[1]*num_tasks[2] << " tasks!" << std::endl;
 		MPI_Finalize();
 		exit(51);
 	}
