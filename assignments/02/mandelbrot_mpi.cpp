@@ -4,6 +4,7 @@
 #include <iostream>
 #include <chrono>
 #include <iterator>
+#include <string>
 #include <sys/time.h>
 #include <tuple>
 #include <vector>
@@ -71,6 +72,7 @@ void calcMandelbrot(Image &image, int size_x, int size_y, int rank_size, int ran
 
 	auto time_start = std::chrono::high_resolution_clock::now();
 
+	// hard coded (total) area in imaginary plane to be calculated
 	const float left = -2.5, right = 1;
 	const float bottom = -1, top = 1;
 
@@ -112,20 +114,24 @@ void calcMandelbrot(Image &image, int size_x, int size_y, int rank_size, int ran
 	auto time_end = std::chrono::high_resolution_clock::now();
 	auto time_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count();
 	
-	std::cout << "Mandelbrot set calculation for " << size_x << "x" << size_y << " took: " << time_elapsed << " ms." << std::endl;
+	std::cout << "Mandelbrot set calculation for rank " << rank << " (" << size_x << "x" << size_y << ") took: " << time_elapsed << " ms." << std::endl;
 }
 
 int main(int argc, char **argv) {
 
+	// start timer
+	auto time_start_global = std::chrono::high_resolution_clock::now();
+
+	// default values
 	int size_x = default_size_x;
 	int size_y = default_size_y;
 
 	// Initialize MPI
-	MPI_Init(&argc, &argv); // initialize the MPI environment
+	MPI_Init(&argc, &argv);
 	int rank_size;
-	MPI_Comm_size(MPI_COMM_WORLD, &rank_size); // get the number of ranks
+	MPI_Comm_size(MPI_COMM_WORLD, &rank_size);
 	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank); // get the rank of the caller
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	std::cout << "This print was performed by rank " << rank << "/" << rank_size << std::endl;
 	
 	// check for image size
@@ -133,29 +139,39 @@ int main(int argc, char **argv) {
 		size_x = atoi(argv[1]);
 		size_y = atoi(argv[2]);
 		if (rank == 0) {
-			std::cout << "Using size " << size_x << "x" << size_y << std::endl;
+			if ((size_y % rank_size) != 0) {
+				std::string err_msg = "Height of the image must be a multiple of the rank size (=" + 
+									  std::to_string(rank_size) + "), but is " + std::to_string(size_y);
+				throw std::invalid_argument(err_msg);
+			}
 		}
+
 	} else {
 		if (rank == 0) {
 			std::cout << "No arguments given, using default size " << size_x << "x" << size_y << std::endl;
 		}
 	}
 
-	// TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO TO DO
-	// check if image resolution is divisible by the number of ranks
-
+	// create empty Image with final size
 	Image image(num_channels * size_x * size_y);
 
 	// make sub-images (devided in y-direction)
 	int sub_image_size_y = size_y / rank_size;
 	Image sub_image(num_channels * size_x * sub_image_size_y);
+
+	// calculate color values from Mandelbrot set of sub-image
 	calcMandelbrot(sub_image, size_x, sub_image_size_y, rank_size, rank);
 
-	// gather sub-images from all ranks
+	// gather sub-images from all ranks into the global image
 	MPI_Gather(sub_image.data(), sub_image.size(), MPI_UINT8_T, image.data(), sub_image.size(), MPI_UINT8_T, 0, MPI_COMM_WORLD);
 	MPI_Finalize();
 
 	if (rank == 0) {
+		// end timer
+		auto time_end_global = std::chrono::high_resolution_clock::now();
+		auto time_elapsed_global = std::chrono::duration_cast<std::chrono::milliseconds>(time_end_global - time_start_global).count();
+		std::cout << "Total parallel Mandelbrot set calculation (with " << rank_size << " ranks) took: " << time_elapsed_global << " ms." << std::endl;
+		// write to png
 		constexpr int stride_bytes = 0;
 		stbi_write_png("mandelbrot_mpi.png", size_x, size_y, num_channels, image.data(), stride_bytes);
 	}

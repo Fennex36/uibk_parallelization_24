@@ -111,6 +111,8 @@ void calcMandelbrot(Image &image, int size_x, int size_y) {
 
 int main(int argc, char **argv) {
 
+	auto time_start_global = std::chrono::high_resolution_clock::now();
+
 	int size_x = default_size_x;
 	int size_y = default_size_y;
 
@@ -125,6 +127,10 @@ int main(int argc, char **argv) {
 	Image image(num_channels * size_x * size_y);
 
 	calcMandelbrot(image, size_x, size_y);
+
+	auto time_end_global = std::chrono::high_resolution_clock::now();
+	auto time_elapsed_global = std::chrono::duration_cast<std::chrono::milliseconds>(time_end_global - time_start_global).count();
+	std::cout << "Total serial Mandelbrot set calculation took: " << time_elapsed_global << " ms." << std::endl;
 
 	constexpr int stride_bytes = 0;
 	stbi_write_png("mandelbrot_seq.png", size_x, size_y, num_channels, image.data(), stride_bytes);
