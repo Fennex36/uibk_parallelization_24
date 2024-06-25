@@ -10,7 +10,7 @@
 #SBATCH --output=output.log
 
 # Maximum number of tasks (=processes) to start in total
-#SBATCH --ntasks=8
+#SBATCH --ntasks=64
 
 # Maximum number of tasks (=processes) to start per node 
 #SBATCH --ntasks-per-node=8
