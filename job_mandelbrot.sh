@@ -10,12 +10,12 @@
 #SBATCH --output=output.log
 
 # Maximum number of tasks (=processes) to start in total
-#SBATCH --ntasks=4
+#SBATCH --ntasks=64
 
 # Maximum number of tasks (=processes) to start per node
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=8
 
 
 module load openmpi/3.1.6-gcc-12.2.0-d2gmn55 gcc/12.2.0-gcc-8.5.0-p4pe45v
-# mpiexec -n $SLURM_NTASKS assignments/02/build/mandelbrot_mpi 1344 768
-exec assignments/02/build/mandelbrot_seq 1344 768
+mpiexec -n $SLURM_NTASKS assignments/02/build/mandelbrot_mpi 3840 2160
+exec assignments/02/build/mandelbrot_seq 3840 2160

@@ -68,7 +68,7 @@ auto HSVToRGB(double H, const double S, double V) {
 	return std::make_tuple(R, G, B);
 }
 
-void calcMandelbrot(Image &image, int size_x, int size_y, int rank_size, int rank) {
+void calcMandelbrot(Image &image, int size_x, int size_y, int rank) {
 
 	auto time_start = std::chrono::high_resolution_clock::now();
 
@@ -76,45 +76,44 @@ void calcMandelbrot(Image &image, int size_x, int size_y, int rank_size, int ran
 	const float left = -2.5, right = 1;
 	const float bottom = -1, top = 1;
 
-	// calculate rank-specific borders in complex space
-	const float top_sub_image = (top - bottom) / rank_size * (rank+1) + bottom;
-	const float bottom_sub_image = (top - bottom) / rank_size * rank + bottom;
+	// loop through all pixels from the sub-image, row-wise from top-left to bottom-right, denoted by i
+	// starting value of i depends on rank
+	int im_size = static_cast<int>(image.size());
+	int i_start = rank * im_size/num_channels;
+	int i_end = i_start + im_size/num_channels;
+	for (int i = i_start; i < i_end; i++) {
+		int pixel_x = i % size_x;
+		int pixel_y = i / size_x;
+		// transform pixel to position in complex plane
+		const float cx = (pixel_x / (float)size_x) * (right - left) + left;
+		const float cy = (pixel_y / (float)size_y) * (top - bottom) + bottom;
+		float x = 0;
+		float y = 0;
+		int num_iterations = 0;
 
-	for (int pixel_y = 0; pixel_y < size_y; pixel_y++) {
-		// scale y pixel into mandelbrot coordinate system
-		const float cy = (pixel_y / (float)size_y) * (top_sub_image - bottom_sub_image) + bottom_sub_image;
-		for (int pixel_x = 0; pixel_x < size_x; pixel_x++) {
-			// scale x pixel into mandelbrot coordinate system
-			const float cx = (pixel_x / (float)size_x) * (right - left) + left;
-			float x = 0;
-			float y = 0;
-			int num_iterations = 0;
-
-			// Check if the distance from the relative origin becomes
-			// greater than 2 within the max number of iterations.
-			while ((x * x + y * y <= 2 * 2) && (num_iterations < max_iterations)) {
-				float x_tmp = x * x - y * y + cx;
-				y = 2 * x * y + cy;
-				x = x_tmp;
-				num_iterations += 1;
-			}
-
-			// Normalize iteration and write it to pixel position
-			double value = fabs((num_iterations / (float)max_iterations)) * 200;
-
-			auto [red, green, blue] = HSVToRGB(value, 1.0, 1.0);
-
-			int channel = 0;
-			image[index(pixel_y, pixel_x, size_y, size_x, channel++)] = (uint8_t)(red * UINT8_MAX);
-			image[index(pixel_y, pixel_x, size_y, size_x, channel++)] = (uint8_t)(green * UINT8_MAX);
-			image[index(pixel_y, pixel_x, size_y, size_x, channel++)] = (uint8_t)(blue * UINT8_MAX);
+		// Check if the distance from the relative origin becomes
+		// greater than 2 within the max number of iterations.
+		while ((x * x + y * y <= 2 * 2) && (num_iterations < max_iterations)) {
+			float x_tmp = x * x - y * y + cx;
+			y = 2 * x * y + cy;
+			x = x_tmp;
+			num_iterations += 1;
 		}
+
+		// Normalize iteration and write it to pixel position
+		double value = fabs((num_iterations / (float)max_iterations)) * 200;
+
+		auto [red, green, blue] = HSVToRGB(value, 1.0, 1.0);
+
+		image[(i-i_start)*num_channels] = (uint8_t)(red * UINT8_MAX);
+		image[(i-i_start)*num_channels+1] = (uint8_t)(green * UINT8_MAX);
+		image[(i-i_start)*num_channels+2] = (uint8_t)(blue * UINT8_MAX);
 	}
 	
 	auto time_end = std::chrono::high_resolution_clock::now();
 	auto time_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count();
 	
-	std::cout << "Mandelbrot set calculation for rank " << rank << " (" << size_x << "x" << size_y << ") took: " << time_elapsed << " ms." << std::endl;
+	std::cout << "Mandelbrot set calculation for rank " << rank << " (" << image.size() << " pixels) took: " << time_elapsed << " ms." << std::endl;
 }
 
 int main(int argc, char **argv) {
@@ -139,9 +138,9 @@ int main(int argc, char **argv) {
 		size_x = atoi(argv[1]);
 		size_y = atoi(argv[2]);
 		if (rank == 0) {
-			if ((size_y % rank_size) != 0) {
-				std::string err_msg = "Height of the image must be a multiple of the rank size (=" + 
-									  std::to_string(rank_size) + "), but is " + std::to_string(size_y);
+			if (((size_x * size_y) % rank_size) != 0) {
+				std::string err_msg = "Total pixel count of the image must be a multiple of the rank size (=" + 
+									  std::to_string(rank_size) + "), but is " + std::to_string(size_x * size_y);
 				throw std::invalid_argument(err_msg);
 			}
 		}
@@ -155,12 +154,11 @@ int main(int argc, char **argv) {
 	// create empty Image with final size
 	Image image(num_channels * size_x * size_y);
 
-	// make sub-images (devided in y-direction)
-	int sub_image_size_y = size_y / rank_size;
-	Image sub_image(num_channels * size_x * sub_image_size_y);
+	// make sub-images
+	Image sub_image((num_channels * size_x * size_y) / rank_size);
 
 	// calculate color values from Mandelbrot set of sub-image
-	calcMandelbrot(sub_image, size_x, sub_image_size_y, rank_size, rank);
+	calcMandelbrot(sub_image, size_x, size_y, rank);
 
 	// gather sub-images from all ranks into the global image
 	MPI_Gather(sub_image.data(), sub_image.size(), MPI_UINT8_T, image.data(), sub_image.size(), MPI_UINT8_T, 0, MPI_COMM_WORLD);
